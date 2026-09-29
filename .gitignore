@@ -1,0 +1,21 @@
+# delete this file if you want to ignore all files in the repository
+3d-floating-shape
+*.out
+*.exe
+
+# delete this file if you want to ignore all object files
+*.o
+*.obj
+*.pdb
+*.ilk
+*.bat
+
+# delete this file if you want to ignore all temporary files
+.vscode/
+.idea/
+*.swp
+*~
+
+# delete this file if you want to ignore all OS generated files
+.DS_Store
+Thumbs.db
