@@ -108,7 +108,7 @@ int main()
     }
 
     int screen = DefaultScreen(dpy);
-    Window win = XCreateSimpleWindow(dpy, RootWindow(dpy, screen), 0, 0, WIDTH, HEIGHT, 1, BlackPixel(dpy, screen), BlackPixel(dpy, screen));
+    Window win = XCreateSimpleWindow(dpy, RootWindow(dpy, screen), 0, 0, WIDTH, HEIGHT, 1, WhitePixel(dpy, screen), WhitePixel(dpy, screen));
     XSelectInput(dpy, win, ExposureMask | KeyPressMask);
     XStoreName(dpy, win, "3D Floating Shape");
     XMapWindow(dpy, win);
@@ -188,6 +188,9 @@ int main()
     bool running = true;
     long long last_time = current_time_micros();
 
+    uint32_t edge_colors[] = {0xFF0000, 0x00FF00, 0x0000FF};
+    int num_colors = 3;
+
     while (running)
     {
         while (XPending(dpy) > 0)
@@ -229,21 +232,16 @@ int main()
         }
 
         for (int i = 0; i < WIDTH * HEIGHT; ++i)
-            frame_buffer[i] = 0x000000;
+            frame_buffer[i] = 0xFFFFFF;
 
         if (show_grid)
         {
-            uint32_t grid_color = 0x004400;
-            for (int i = -100; i <= 100; i += 20)
-            {
-                point_3d_t p1 = project({(double)i, -20.0, -100.0}, cam_x, cam_y, cam_z, cam_yaw); // Project the first point of the line
-                point_3d_t p2 = project({(double)i, -20.0, 100.0}, cam_x, cam_y, cam_z, cam_yaw);  // Project the second point of the line
-                draw_line(frame_buffer, p1.x, p1.y, p2.x, p2.y, grid_color);                       // Draw the line between the two projected points
+            uint32_t axis_color = 0x000000;
+            point_3d_t origin = project({0.0, 0.0, 0.0}, cam_x, cam_y, cam_z, cam_yaw);
 
-                point_3d_t p3 = project({-100.0, -20.0, (double)i}, cam_x, cam_y, cam_z, cam_yaw); // Project the third point of the line
-                point_3d_t p4 = project({100.0, -20.0, (double)i}, cam_x, cam_y, cam_z, cam_yaw);  // Project the fourth point of the line
-                draw_line(frame_buffer, p3.x, p3.y, p4.x, p4.y, grid_color);                       // Draw the line between the two projected points
-            }
+            draw_line(frame_buffer, 0, (int)origin.y, WIDTH - 1, (int)origin.y, axis_color);
+            draw_line(frame_buffer, (int)origin.x, 0, (int)origin.x, HEIGHT - 1, axis_color);
+            draw_line(frame_buffer, (int)origin.x + 210, (int)origin.y - 140, (int)origin.x - 210, (int)origin.y + 140, axis_color);
         }
 
         double angle_rads = current_time_micros() / 1000000.0;
@@ -252,19 +250,42 @@ int main()
 
         for (const auto &pt : active.pts) // loop shows the rotation of the shape around the Y-axis
         {
+            double scale = 0.5;
+            double px = pt.x * scale;
+            double py = pt.y * scale;
+            double pz = pt.z * scale;
+
+            double cos_a = std::cos(angle_rads);
+            double sin_a = std::sin(angle_rads);
+            double cos_b = std::cos(angle_rads * 0.7);
+            double sin_b = std::sin(angle_rads * 0.7);
+            double cos_c = std::cos(angle_rads * 0.4);
+            double sin_c = std::sin(angle_rads * 0.4);
+
+            double y1 = py * cos_a - pz * sin_a;
+            double z1 = py * sin_a + pz * cos_a;
+
+            double x2 = px * cos_b - z1 * sin_b;
+            double z2 = px * sin_b + z1 * cos_b;
+
+            double x3 = x2 * cos_c - y1 * sin_c;
+            double y3 = x2 * sin_c + y1 * cos_c;
+
             point_3d_t rot_pt;
-            rot_pt.x = pt.x * std::cos(angle_rads) - pt.z * std::sin(angle_rads);
-            rot_pt.y = pt.y;
-            rot_pt.z = pt.x * std::sin(angle_rads) + pt.z * std::cos(angle_rads);
+            rot_pt.x = x3;
+            rot_pt.y = y3;
+            rot_pt.z = z2;
+
             projected_pts.push_back(project(rot_pt, cam_x, cam_y, cam_z, cam_yaw));
         }
 
-        uint32_t shape_color = 0xFF0000;
+        int color_idx = 0;
         for (const auto &edge : active.edges) // first = index of first point, second = index of second point
         {
             point_3d_t p1 = projected_pts[edge.first];
             point_3d_t p2 = projected_pts[edge.second];
-            draw_line(frame_buffer, p1.x, p1.y, p2.x, p2.y, shape_color);
+            draw_line(frame_buffer, p1.x, p1.y, p2.x, p2.y, edge_colors[color_idx % num_colors]);
+            color_idx++;
         }
 
         XPutImage(dpy, win, gc, image, 0, 0, 0, 0, WIDTH, HEIGHT);
